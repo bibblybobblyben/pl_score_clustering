@@ -13,6 +13,7 @@ numpy = "^2.1.1"
 jupyterlab = "^4.2.5"
 matplotlib = "^3.9.2"
 pre-commit = "^3.8.0"
+nbstripout = "^0.7.1"
 
 
 [build-system]
