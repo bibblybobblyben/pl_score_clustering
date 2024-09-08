@@ -29,6 +29,7 @@ class Model(ABC):
             in training. Defaults to None.
         """
         self.data = np.divide(features, np.amax(features, axis=1).reshape(-1, 1))
+        self.data = np.nan_to_num(self.data)
         self.data = np.mean(self.data, axis=1).reshape(-1, 1)
         if target is not None:
             self.target = target.reshape(-1)
