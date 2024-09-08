@@ -1,3 +1,9 @@
+"""
+A package for analysing student exams results. Contains the modules:
+- utils
+"""
+
+
 import matplotlib as mpl
 import matplotlib.colors as mpc
 import matplotlib.pyplot as plt
@@ -16,7 +22,7 @@ HC_COLOURS_NAMED = {
 }
 
 for cname, cdef in HC_COLOURS_NAMED.items():
-    mpc._colors_full_map[cname] = cdef
+    mpc._colors_full_map[cname] = cdef  # pylint: disable=W0212
 
 
 mpl.rcParams["axes.prop_cycle"] = mpl.cycler(
