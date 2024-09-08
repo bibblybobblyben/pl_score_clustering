@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
 
 
 class Model(ABC):
@@ -15,7 +16,22 @@ class Model(ABC):
     """
 
     def __init__(self) -> None:
-        return
+        self.data = np.array([])
+        self.target = np.array([])
+
+    def preprocess(self, features: np.array, target: np.array | None = None):
+        """Preprocess data such that it is in a consistent form for modelling.
+
+        Args:
+            features (np.array): Array of n_students x n_questions, containing
+            scores on each question
+            target (np.array | None, optional): Target variable. Only used
+            in training. Defaults to None.
+        """
+        self.data = np.divide(features, np.amax(features, axis=1).reshape(-1, 1))
+        self.data = np.mean(self.data, axis=1).reshape(-1, 1)
+        if target is not None:
+            self.target = target.reshape(-1)
 
     @abstractmethod
     def fit(self, features: np.array, target: np.array):
@@ -47,22 +63,6 @@ class LogReg(Model):
     def __init__(self) -> None:
         super().__init__()
         self.lr = LogisticRegression()
-        self.data = np.array([])
-        self.target = np.array([])
-
-    def preprocess(self, features: np.array, target: np.array | None = None):
-        """Preprocess data such that it is in a consistent form for modelling.
-
-        Args:
-            features (np.array): Array of n_students x n_questions, containing
-            scores on each question
-            target (np.array | None, optional): Target variable. Only used
-            in training. Defaults to None.
-        """
-        self.data = np.divide(features, np.amax(features, axis=1).reshape(-1, 1))
-        self.data = np.mean(self.data, axis=1).reshape(-1, 1)
-        if target is not None:
-            self.target = target.reshape(-1)
 
     def fit(self, features: np.array, target: np.array):
         """Train the model stored on the class
@@ -101,3 +101,45 @@ class LogReg(Model):
         """
         self.preprocess(features)
         return self.lr.predict_proba(self.data)
+
+
+class KNN(Model):
+    """Applies a K nearest neighbours algorithm to data"""
+
+    def __init__(self, n_neighbours=10) -> None:
+        super().__init__()
+        self.knn = KNeighborsClassifier(n_neighbors=n_neighbours)
+
+    def fit(self, features: np.array, target: np.array):
+        """Train a KNearestNeighbours model according to inputs
+
+        Args:
+            features (np.array): coordinates for KNN clustering
+            target (np.array): labels for each row in features
+        """
+        self.preprocess(features=features, target=target)
+        self.knn.fit(X=self.data, y=self.target)
+
+    def predict(self, features: np.array):
+        """label new samples using the KNN stored on the class
+
+        Args:
+            features (np.array): samples to identify
+
+        Returns:
+            np.array: labels for each sample
+        """
+        self.preprocess(features=features)
+        return self.knn.predict(X=self.data)
+
+    def predict_proba(self, features: np.array):
+        """Probabilities of each sample being in each of the target classes
+
+        Args:
+            features (np.array): Coordinates to classify with KNN
+
+        Returns:
+            np.array: Probabilities of being in each target class
+        """
+        self.preprocess(features=features)
+        return self.knn.predict_proba(X=self.data)
