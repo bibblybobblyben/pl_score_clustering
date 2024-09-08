@@ -34,6 +34,7 @@ def load_sample_data(
             usecols=range(1, n_cols + 1),
         )
         data = df.to_numpy()
+        data = np.nan_to_num(data)
         data = data[np.amax(data, axis=1) <= 7, :]
         data = data[:n_rows]
 
