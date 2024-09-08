@@ -34,3 +34,13 @@ cmap = mpl.colors.LinearSegmentedColormap.from_list(
 )
 
 mpl.colormaps.register(cmap, name="hccmap")
+
+
+def plots_ready():
+    """Gives you an excuse to import pinpointlearning unused.
+    Verifies the import has succeeded and plt configs set.
+
+    Returns:
+        bool: True to verify package has imported
+    """
+    return True
