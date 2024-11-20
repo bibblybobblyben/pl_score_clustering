@@ -6,19 +6,22 @@ publication
 import json
 import numpy as np
 from sklearn.metrics import log_loss
+from sklearn.model_selection import train_test_split
 from pinpointlearning.model import LogReg, KNN
 from pinpointlearning.utils import load_sample_data
 
 # placeholder data ingestion
-data = load_sample_data(n_cols=8, synthetic=False)
+N_COLS = 23
+data = load_sample_data(n_cols=N_COLS, n_rows=3 * 10**3, synthetic=False, binary=True)
 print(data)
 
-features = data[:, :-1]
+features = data[:, :N_COLS]  # [:, :-1]
 target = data[:, -1]
 target = target / np.amax(target)
 target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
 
-
+traintest, val = train_test_split(data, train_size=0.9, random_state=2)
+train, test = train_test_split(traintest, train_size=0.85, random_state=2)
 ###
 # Explore how performance of KNN changes with number of neighbours
 ###
@@ -26,16 +29,43 @@ target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
 
 n_neighbours = list(range(2, 10, 2)) + [a * 10 for a in range(1, 10)]
 
-losses = []
-for n in n_neighbours:
-    clf = KNN(n_neighbours=n)
+
+by_target = []
+# iterate over papers?
+losses_knn = []
+losses_lr = []
+for qnum in range(N_COLS):
+    losses = []
+    colmask = [a != qnum for a in range(N_COLS)]
+    features = train[:, colmask]
+    target = np.array(train[:, qnum], dtype=int)
+    test_features = test[:, colmask]
+    test_target = np.array(test[:, qnum], dtype=int)
+    test_ll = []
+    for n in n_neighbours:
+        clf = KNN(n_neighbours=n)
+        clf.fit(features=features, target=target)
+        probs = clf.predict_proba(features)
+        losses.append(log_loss(target, probs[:, 1]))
+        print(np.unique(test_target))
+        test_ll.append(log_loss(test_target, clf.predict_proba(test_features)))
+    n_chosen = n_neighbours[np.argwhere(np.array(test_ll) == np.amin(test_ll))[0][0]]
+
+    clf = KNN(n_neighbours=n_chosen)
     clf.fit(features=features, target=target)
-    probs = clf.predict_proba(features)
-    losses.append(log_loss(target, probs[:, 1]))
+    losses_knn.append(log_loss(test_target, clf.predict_proba(test_features)))
 
-results = {"n_neighbours": n_neighbours, "log_losses": losses}
+    lr = LogReg()
+    lr.fit(features=features, target=target)
+    losses_lr.append(log_loss(test_target, lr.predict_proba(test_features)))
 
-with open("../data/outputs/knn_n_neighbours_performance.json", "w", encoding="rb") as f:
+    by_target.append(losses)
+results = {"n_neighbours": n_neighbours, "log_losses": by_target}
+print(results)
+
+with open(
+    "../data/outputs/knn_n_neighbours_performance.json", "w", encoding="utf-8"
+) as f:
     json.dump(results, f)
 
 
@@ -54,5 +84,5 @@ performances = [
 ]
 
 results = {"model_names": model_names, "log_losses": performances}
-with open("../data/outputs/model_comparison.json", "w", encoding="rb") as f:
+with open("../data/outputs/model_comparison.json", "w", encoding="utf-8") as f:
     json.dump(results, f)
