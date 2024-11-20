@@ -2,7 +2,6 @@
 Utility functions for creating the exam analysis tools.
 """
 
-import pandas as pd
 import numpy as np
 
 
@@ -28,12 +27,9 @@ def load_sample_data(
     if synthetic:
         data = np.random.uniform(0, 7, (n_rows, n_cols))
     else:
-        df = pd.read_csv(
-            "../data/LargeDataSet13_HigherExamsWithClassAndSchoolsAvailable.csv",
-            skiprows=7,
-            usecols=range(1, n_cols + 1),
-        )
-        data = df.to_numpy()
+        data = np.load("../data/processed/scores/Exam_1.npy")
+        mask = np.isnan(data[:, 0])
+        data = data[mask]
         data = np.nan_to_num(data)
         data = data[np.amax(data, axis=1) <= 7, :]
         data = data[:n_rows]
