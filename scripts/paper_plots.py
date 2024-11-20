@@ -3,6 +3,7 @@ Produce all plots for the paper in one fell swoop. Simplifies making changes
 to all plots at once.
 """
 import json
+import numpy as np
 import matplotlib.pyplot as plt
 import pinpointlearning as pl
 
@@ -15,7 +16,7 @@ if pl.plots_ready():
 else:
     raise RuntimeError("Package has not imported.")
 
-with open("../data/outputs/model_comparison.json", encoding="rb") as f:
+with open("../data/outputs/model_comparison.json", encoding="utf-8") as f:
     results = json.load(f)
 
 fig, ax = plt.subplots(nrows=1, ncols=1)
@@ -31,12 +32,11 @@ fig.savefig("../figs/ModelComparison.png", dpi=250)
 # View KNN performance as f(n_neighbours)
 ###
 
-with open("../data/outputs/knn_n_neighbours_performance.json", encoding="rb") as f:
+with open("../data/outputs/knn_n_neighbours_performance.json", encoding="utf-8") as f:
     results = json.load(f)
 
 fig, ax = plt.subplots(nrows=1, ncols=1)
-
-ax.scatter(results["n_neighbours"], results["log_losses"])
+ax.scatter(results["n_neighbours"], np.array(results["log_losses"]).mean(axis=0))
 ax.set_xlabel("Number of neighbours")
 ax.set_ylabel("Log loss")
 fig.tight_layout()
