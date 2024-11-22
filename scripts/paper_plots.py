@@ -25,7 +25,7 @@ for row in range(data.shape[0]):
     data[row, :] = data[row, :] / data[row, row]
 
 fig, ax = plt.subplots(nrows=1, ncols=1)
-cplot = ax.matshow(data, cmap="hccmap")
+cplot = ax.matshow(data, cmap="hccmap_lblues", vmin=0, vmax=1)
 ax.set_xticks(
     list(range(data.shape[1])),
     labels=[f"Exam {a}" for a in range(data.shape[1])],
