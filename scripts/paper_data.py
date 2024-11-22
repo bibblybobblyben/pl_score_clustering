@@ -5,10 +5,49 @@ publication
 """
 import json
 import numpy as np
+import pandas as pd
 from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
 from pinpointlearning.model import LogReg, KNN
 from pinpointlearning.utils import load_sample_data
+
+
+#####
+# Data description plots
+######
+
+n_students = []
+n_pre = []
+enames = []
+mask = np.load("../data/outputs/CleanMask.npy")
+for file in range(13):
+    data = np.load(f"../data/processed/scores/Exam_{file}.npy")
+    n_pre.append(sum(((~np.isnan(data)).sum(axis=1) > 0)))
+    n_students.append(sum(mask * ((~np.isnan(data)).sum(axis=1) > 0)))
+    enames.append(f"Exam {file}")
+
+df = pd.DataFrame()
+df["Exam"] = enames
+df["Number"] = n_students
+df["Pre"] = n_pre
+df.to_csv("../data/outputs/StudentExamCountBreakdown.csv")
+
+
+comp = np.zeros((13, 13))
+
+for i in range(13):
+    mask = np.load(f"../data/processed/masks/Exam_{i}_Mask.npy")
+    ref = ~np.isnan(np.load(f"../data/processed/scores/Exam_{i}.npy")[:, 0])
+    ref = mask * ref
+    for j in range(13):
+        mask2 = np.load(f"../data/processed/masks/Exam_{j}_Mask.npy")
+        target = ~np.isnan(np.load(f"../data/processed/scores/Exam_{j}.npy")[:, 0])
+        target = mask * target
+        comp[i, j] = np.sum(target * ref)
+
+np.save("../data/outputs/PaperCoincidences.npy", comp)
+print(comp)
+
 
 # placeholder data ingestion
 N_COLS = 23

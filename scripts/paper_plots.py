@@ -16,6 +16,33 @@ if pl.plots_ready():
 else:
     raise RuntimeError("Package has not imported.")
 
+####
+# Paper corr mat
+####
+
+data = np.load("../data/outputs/PaperCoincidences.npy")
+for row in range(data.shape[0]):
+    data[row, :] = data[row, :] / data[row, row]
+
+fig, ax = plt.subplots(nrows=1, ncols=1)
+cplot = ax.matshow(data, cmap="hccmap")
+ax.set_xticks(
+    list(range(data.shape[1])),
+    labels=[f"Exam {a}" for a in range(data.shape[1])],
+    rotation=90,
+    size=6,
+)
+ax.set_yticks(
+    list(range(data.shape[1])),
+    labels=[f"Exam {a}" for a in range(data.shape[1])],
+    size=6,
+)
+fig.colorbar(cplot, ax=ax, label="Fractional overlap")
+ax.minorticks_off()
+fig.tight_layout()
+fig.savefig("../figs/PaperCorrelationPlot.png", dpi=500)
+
+
 with open("../data/outputs/model_comparison.json", encoding="utf-8") as f:
     results = json.load(f)
 
