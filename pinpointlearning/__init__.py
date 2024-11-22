@@ -35,6 +35,18 @@ cmap = mpl.colors.LinearSegmentedColormap.from_list(
 
 mpl.colormaps.register(cmap, name="hccmap")
 
+cmap = mpl.colors.LinearSegmentedColormap.from_list(
+    "hccmap_lblues", ["#ffffff", "hclightblue"]
+)
+
+mpl.colormaps.register(cmap, name="hccmap_lblues")
+
+
+cmap = mpl.colors.LinearSegmentedColormap.from_list(
+    "hccmap_dblues", ["#ffffff", "hcdarkblue"]
+)
+mpl.colormaps.register(cmap, name="hccmap_dblues")
+
 
 def plots_ready():
     """Gives you an excuse to import pinpointlearning unused.
