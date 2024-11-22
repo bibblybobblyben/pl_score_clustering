@@ -18,6 +18,7 @@ class Model(ABC):
     def __init__(self) -> None:
         self.data = np.array([])
         self.target = np.array([])
+        self.sf = False
 
     def preprocess(self, features: np.array, target: np.array | None = None):
         """Preprocess data such that it is in a consistent form for modelling.
@@ -30,7 +31,8 @@ class Model(ABC):
         """
         self.data = np.divide(features, np.amax(features, axis=1).reshape(-1, 1))
         self.data = np.nan_to_num(self.data)
-        self.data = np.mean(self.data, axis=1).reshape(-1, 1)
+        if self.sf:
+            self.data = np.mean(self.data, axis=1).reshape(-1, 1)
         if target is not None:
             self.target = target.reshape(-1)
 
@@ -58,12 +60,13 @@ class Model(ABC):
 class LogReg(Model):
     """
     Applies a single feature logistic regression model to input data, based
-    on the mean score across all questions
+    on the mean score across all questions and ive made an edit
     """
 
-    def __init__(self) -> None:
+    def __init__(self, single_feature=False) -> None:
         super().__init__()
         self.lr = LogisticRegression()
+        self.sf = single_feature
 
     def fit(self, features: np.array, target: np.array):
         """Train the model stored on the class
@@ -100,7 +103,7 @@ class LogReg(Model):
             np.array: Array of n_samples, n_classes with probabilities of each
             row being within each of the target classes [0,1]
         """
-        self.preprocess(features)
+        self.preprocess(features=features)
         return self.lr.predict_proba(self.data)
 
 
