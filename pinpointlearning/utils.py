@@ -28,7 +28,7 @@ def load_sample_data(
         data = np.random.uniform(0, 7, (n_rows, n_cols))
     else:
         data = np.load("../data/processed/scores/Exam_1.npy")
-        mask = np.isnan(data[:, 0])
+        mask = ~np.isnan(data[:, 0])
         data = data[mask]
         data = np.nan_to_num(data)
         data = data[np.amax(data, axis=1) <= 7, :]
