@@ -83,15 +83,18 @@ for i in range(13):
     data = np.load(f"../data/processed/binarised/Exam_{i}.npy")
     ref = ~np.isnan(data)[:, 0]
     itercorr = np.zeros((data.shape[1], data.shape[1]))
-    data = data[ref, :]
+    data = np.array(data[ref, :], dtype=bool)
     for q in range(data.shape[1]):
         for p in range(data.shape[1]):
-            itercorr[q, p] = np.sum(data[:, q] * data[:, p]) / np.sum(ref)
+            itercorr[q, p] = np.sum(data[:, q] * data[:, p]) / sum(
+                data[:, q]
+            )  # data.shape[0]
     print(i, np.sum(ref))
     allcorrs.append({f"Exam_{i}": itercorr.tolist()})
+
+print(allcorrs)
 with open("../data/outputs/QuestionCorrMats.json", "w", encoding="utf-8") as f:
     json.dump(allcorrs, f)
-
 
 # placeholder data ingestion
 N_COLS = 23
