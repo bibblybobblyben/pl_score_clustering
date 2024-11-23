@@ -16,15 +16,40 @@ from pinpointlearning.utils import load_sample_data
 # Data description plots
 ######
 
+with open("../data/Processed_Exams.json", "r", encoding="utf-8") as f:
+    exam_metadata = json.load(f)
+
+# How many students sit each exam, and how does cleaning change it?
 n_students = []
 n_pre = []
 enames = []
+
+frac_raw = {}
+frac_bin = {}
+
 mask = np.load("../data/outputs/CleanMask.npy")
 for file in range(13):
     data = np.load(f"../data/processed/scores/Exam_{file}.npy")
     n_pre.append(sum(((~np.isnan(data)).sum(axis=1) > 0)))
     n_students.append(sum(mask * ((~np.isnan(data)).sum(axis=1) > 0)))
     enames.append(f"Exam {file}")
+    # exam grades
+    mask = np.load(f"../data/processed/masks/Exam_{file}_Mask.npy")
+    binary_scores = np.load(f"../data/processed/binarised/Exam_{file}.npy")
+    select = np.array(mask * ((~np.isnan(data)).sum(axis=1) > 0), dtype=bool)
+    exam_meta = exam_metadata[file]
+    poss_score = sum(exam_metadata[file]["maxes"])
+    frac_raw[f"Exam_{file}"] = (np.sum(data, axis=1) / poss_score)[select].tolist()
+    frac_bin[f"Exam_{file}"] = (np.sum(binary_scores, axis=1) / binary_scores.shape[1])[
+        select
+    ].tolist()
+
+
+exam_scores = [{"raw": frac_raw, "binarised": frac_bin}]
+
+with open("../data/outputs/TotalExamScores.json", "w", encoding="utf-8") as f:
+    json.dump(exam_scores, f)
+
 
 df = pd.DataFrame()
 df["Exam"] = enames
@@ -34,6 +59,8 @@ df.to_csv("../data/outputs/StudentExamCountBreakdown.csv")
 
 
 comp = np.zeros((13, 13))
+
+# How many students sit each combination of exam?
 
 for i in range(13):
     mask = np.load(f"../data/processed/masks/Exam_{i}_Mask.npy")
