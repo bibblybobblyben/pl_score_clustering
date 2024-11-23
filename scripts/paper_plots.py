@@ -137,6 +137,27 @@ ax.set_xlabel("Fractional Grade")
 
 fig.savefig("../figs/DistributionOfExamScores.png", dpi=500)
 
+####
+# Relationship between scores in each exam
+####
+
+with open("../data/outputs/QuestionCorrMats.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+fig, ax = plt.subplots(nrows=5, ncols=3, figsize=(10, 15))
+ax = ax.ravel()
+
+for i, exam in enumerate(data):
+    for title, mat in exam.items():
+        cba = ax[i].matshow(np.array(mat)[:20, :20], cmap="hccmap", vmin=0, vmax=1)
+        ax[i].set_title(f"Exam {i}")
+        ax[i].set_ylabel("q")
+        ax[i].set_xlabel("p")
+plt.colorbar(cba, ax=ax[14], label="Fraction", orientation="horizontal")
+ax[14].axis("off")
+fig.delaxes(ax[13])
+fig.tight_layout()
+fig.savefig("../figs/QuestionCorrMat.png", dpi=500)
+
 
 ###
 # View KNN performance as f(n_neighbours)
