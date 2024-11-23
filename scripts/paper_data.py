@@ -61,7 +61,6 @@ df.to_csv("../data/outputs/StudentExamCountBreakdown.csv")
 comp = np.zeros((13, 13))
 
 # How many students sit each combination of exam?
-
 for i in range(13):
     mask = np.load(f"../data/processed/masks/Exam_{i}_Mask.npy")
     ref = ~np.isnan(np.load(f"../data/processed/scores/Exam_{i}.npy")[:, 0])
@@ -74,6 +73,24 @@ for i in range(13):
 
 np.save("../data/outputs/PaperCoincidences.npy", comp)
 print(comp)
+
+
+# how strongly related are scores in each question, for each exam?
+allcorrs = []
+
+for i in range(13):
+    mask = np.load(f"../data/processed/masks/Exam_{i}_Mask.npy")
+    data = np.load(f"../data/processed/binarised/Exam_{i}.npy")
+    ref = ~np.isnan(data)[:, 0]
+    itercorr = np.zeros((data.shape[1], data.shape[1]))
+    data = data[ref, :]
+    for q in range(data.shape[1]):
+        for p in range(data.shape[1]):
+            itercorr[q, p] = np.sum(data[:, q] * data[:, p]) / np.sum(ref)
+    print(i, np.sum(ref))
+    allcorrs.append({f"Exam_{i}": itercorr.tolist()})
+with open("../data/outputs/QuestionCorrMats.json", "w", encoding="utf-8") as f:
+    json.dump(allcorrs, f)
 
 
 # placeholder data ingestion
