@@ -78,23 +78,29 @@ print(comp)
 # how strongly related are scores in each question, for each exam?
 allcorrs = []
 
+allscores = []
 for i in range(13):
     mask = np.load(f"../data/processed/masks/Exam_{i}_Mask.npy")
     data = np.load(f"../data/processed/binarised/Exam_{i}.npy")
     ref = ~np.isnan(data)[:, 0]
     itercorr = np.zeros((data.shape[1], data.shape[1]))
     data = np.array(data[ref, :], dtype=bool)
+    nscores = []
     for q in range(data.shape[1]):
         for p in range(data.shape[1]):
             itercorr[q, p] = np.sum(data[:, q] * data[:, p]) / sum(
                 data[:, q]
             )  # data.shape[0]
-    print(i, np.sum(ref))
+        nscores.append(float(sum(data[:, q]) / len(data[:, q])))
     allcorrs.append({f"Exam_{i}": itercorr.tolist()})
+    allscores.append({f"Exam_{i}": nscores})
 
-print(allcorrs)
 with open("../data/outputs/QuestionCorrMats.json", "w", encoding="utf-8") as f:
     json.dump(allcorrs, f)
+
+with open("../data/outputs/QuestionScores.json", "w", encoding="utf-8") as f:
+    json.dump(allscores, f)
+
 
 # placeholder data ingestion
 N_COLS = 23
