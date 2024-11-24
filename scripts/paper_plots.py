@@ -158,6 +158,32 @@ fig.delaxes(ax[13])
 fig.tight_layout()
 fig.savefig("../figs/QuestionCorrMat.png", dpi=500)
 
+#####
+# Scores by question by exam
+#####
+
+with open("../data/outputs/QuestionScores.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+fig, ax = plt.subplots(nrows=3, ncols=5, figsize=(15, 10))
+ax = ax.ravel()
+
+for i, exam in enumerate(data):
+    for title, mat in exam.items():
+        roll_ave = [np.mean(mat[max(0, j - 4) : j + 1]) for j in range(len(mat))]
+        ax[i].bar(x=np.arange(1, 21), height=mat[:20])
+        ax[i].plot(np.arange(1, 21), roll_ave[:20], c="hccoral", linewidth=6)
+        ax[i].plot()
+        ax[i].set_title(f"Exam {i}")
+        ax[i].set_ylabel("Average score")
+        ax[i].set_xlabel("Question")
+        ax[i].set_ylim((0, 1))
+# plt.colorbar(cba, ax=ax[14], label="Fraction", orientation="horizontal")
+# ax[14].axis("off")
+fig.delaxes(ax[13])
+fig.delaxes(ax[14])
+fig.tight_layout()
+fig.savefig("../figs/QuestionScores.png", dpi=500)
+
 
 ###
 # View KNN performance as f(n_neighbours)
