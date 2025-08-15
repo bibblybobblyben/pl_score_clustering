@@ -189,12 +189,80 @@ fig.savefig("../figs/QuestionScores.png", dpi=500)
 # View KNN performance as f(n_neighbours)
 ###
 
-with open("../data/outputs/knn_n_neighbours_performance.json", encoding="utf-8") as f:
-    results = json.load(f)
+# with open("../data/outputs/knn_n_neighbours_performance.json", encoding="utf-8") as f:
+#    results = json.load(f)
 
-fig, ax = plt.subplots(nrows=1, ncols=1)
-ax.scatter(results["n_neighbours"], np.array(results["log_losses"]).mean(axis=0))
-ax.set_xlabel("Number of neighbours")
-ax.set_ylabel("Log loss")
+# fig, ax = plt.subplots(nrows=1, ncols=1)
+# ax.scatter(results["n_neighbours"], np.array(results["log_losses"]).mean(axis=0))
+# ax.set_xlabel("Number of neighbours")
+# ax.set_ylabel("Log loss")
+# fig.tight_layout()
+# fig.savefig("../figs/KNN_N_neighbours.png", dpi=250)
+
+
+###
+# View knn performance by exam
+###
+
+fig, ax = plt.subplots(nrows=5, ncols=3, figsize=(15, 8))
+ax = ax.ravel()
+for i in range(13):
+    with open(
+        f"../data/outputs/fits/knn_n_neighbours_performance_{i}.json", encoding="utf-8"
+    ) as f:
+        results = json.load(f)
+    losses = np.array(results["losses_by_exam"])
+    xs = np.array(results["n_explored"])
+    print(losses[i, :, :, :].shape)
+    mus = np.mean(losses[i, :, :, :], axis=(0, 1))
+    sigs = np.std(
+        losses[i, :, :, :], axis=(0, 1)
+    )  # / np.sqrt( losses.shape[1]*losses.shape[2] )
+    ax[i].errorbar(
+        xs,
+        mus,
+        yerr=sigs,
+        # color="hccoral",
+        marker="o",
+        linestyle=" ",
+        linewidth=0,
+        capsize=8,
+        capthick=0.8,
+        elinewidth=0.5,
+    )
+    ax[i].set_xlabel("Number of neighbours")
+    ax[i].set_ylabel("Log loss")
+    ax[i].set_title(f"Exam {i}")
+fig.delaxes(ax[13])
+fig.delaxes(ax[14])
 fig.tight_layout()
-fig.savefig("../figs/KNN_N_neighbours.png", dpi=250)
+fig.savefig("../figs/KNNPerformance_by_exam.png", dpi=300)
+
+
+###
+# how does the exam chosen number of clusters change
+###
+
+
+fig, ax = plt.subplots(nrows=5, ncols=3, figsize=(15, 8))
+ax = ax.ravel()
+
+for i in range(13):
+    with open(
+        f"../data/outputs/fits/knn_n_neighbours_performance_{i}.json", encoding="utf-8"
+    ) as f:
+        results = json.load(f)
+    losses = np.array(results["n_neighbours_by_exam"])
+    xs, mus = np.unique(losses[i], return_counts=True)
+    ax[i].bar(
+        xs,
+        mus,
+    )
+    ax[i].set_xlabel("Optimal number of neighbours")
+    ax[i].set_ylabel("Frequency")
+    ax[i].set_title(f"Exam {i}")
+    ax[i].set_xlim((0, np.amax(losses) + 1))
+fig.delaxes(ax[13])
+fig.delaxes(ax[14])
+fig.tight_layout()
+fig.savefig("../figs/KNN_nchosen_by_exam.png", dpi=300)
