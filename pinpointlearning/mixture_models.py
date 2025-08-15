@@ -1,3 +1,6 @@
+"""
+Tools for clustering numerical data
+"""
 from abc import ABC
 from typing import List, Tuple  # noqa
 
@@ -11,37 +14,61 @@ from pinpointlearning.utils import (
     calculate_bernoulli_prob,
 )
 
+# pylint: disable = C0103
+
 
 class MixtureModel(ABC):
+    """Base class for mixture models. Minimally required classes defined"""
+
     def __init__(self):
-        """Base class for mixture models. Minimally required classes defined"""
         self.aic = -np.inf
         self.bic = -np.inf
         self.ilc = -np.inf
         self.log_likelihood = -np.inf
 
     def fit(self, X) -> None:
+        """Fits your model to data.
+
+        Args:
+            X (_type_): Data vector
+
+        Returns:
+            None
+        """
+        # pylint: disable = W0613
         return None
 
-    def evaluate(self, vecs) -> Tuple:
-        return ()
+    def evaluate(self, vecs) -> float:
+        """Evaluates consistency between vectors
+
+        Args:
+            vecs (_type_): Fitted model params
+
+        Returns:
+            Tuple: Scores
+        """
+        # pylint: disable = W0613
+        return 2.0
 
 
 class BernoulliMixture(MixtureModel):
+    """Estimate parameters of mixture of Bernoulli distributions using expectation
+    maximisation approach.
+
+    Args:
+        n_components (int): Number of mixture components.
+        tol (float): Convergence threshold.
+        max_iter (int): Maximum number of iterations.
+        mu_alpha (float): Alpha smoothing parameter when updating mu estimates.
+        pi_alpha (float): Alpha smoothing parameter when updating pi estimates.
+    """
+
+    # pylint: disable = R0902,
     def __init__(
         self, n_components, tol, max_iter, alpha_mu=0.01, alpha_pi=0.01, use_mlflow=True
     ) -> None:
-        """Estimate parameters of mixture of Bernoulli distributions using expectation
-        maximisation approach.
 
-        Args:
-            n_components (int): Number of mixture components.
-            tol (float): Convergence threshold.
-            max_iter (int): Maximum number of iterations.
-            mu_alpha (float): Alpha smoothing parameter when updating mu estimates.
-            pi_alpha (float): Alpha smoothing parameter when updating pi estimates.
-        """
-
+        super().__init__()
         self.n_components = n_components
         self.tol = tol
         self.max_iter = max_iter
@@ -68,6 +95,7 @@ class BernoulliMixture(MixtureModel):
         self.pi_values = []  # type: List[List]
 
         self.log_likelihood_values = []  # type: List[float]
+        self.expected_shape = (-1, -1)
 
     def _initialise(self, X) -> None:
         """Set initial values for q, mu and pi.
@@ -101,7 +129,7 @@ class BernoulliMixture(MixtureModel):
     def _assignment_probs(self, bernoulli_pr):
         return self.pi * np.prod(bernoulli_pr, axis=2)
 
-    def _update_cluster_lks_value(self, X, store_probs=True) -> None:
+    def _update_cluster_lks_value(self, X) -> None:
         """Calculate cluster likelihood values using current parameter
         estimates.
 
@@ -360,8 +388,7 @@ class BernoulliMixture(MixtureModel):
         ).reshape((-1, 1))
 
         # calculate the weighted sum of probabilities
-        predictions = np.zeros(X.shape[0])
-
+        weighted_pred = np.zeros(X.shape[0])
         for i in range(self.n_components):
-            weighted_pred = normed_assignment_probs[:, i] * self.mu[i, pred_mask]
+            weighted_pred += normed_assignment_probs[:, i] * self.mu[i, pred_mask]
         return weighted_pred
