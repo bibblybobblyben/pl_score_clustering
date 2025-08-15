@@ -10,8 +10,9 @@ from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
 from pinpointlearning.model import LogReg, KNN
 from pinpointlearning.utils import load_sample_data
+from pinpointlearning.mixture_models import BernoulliMixture
 
-
+# quit()
 #####
 # Data description plots
 ######
@@ -114,45 +115,147 @@ target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
 
 traintest, val = train_test_split(data, train_size=0.9, random_state=2)
 train, test = train_test_split(traintest, train_size=0.85, random_state=2)
+
+
 ###
 # Explore how performance of KNN changes with number of neighbours
 ###
 
 
-n_neighbours = list(range(2, 10, 2)) + [a * 10 for a in range(1, 10)]
+n_neighbours = list(range(3, 11, 2)) + [a * 10 + 1 for a in range(1, 10)]
 
-
+n_neighbours = [3, 5, 7, 9, 11, 13, 15, 17, 21, 25, 51, 101, 251]
 by_target = []
 # iterate over papers?
 losses_knn = []
 losses_lr = []
-for qnum in range(N_COLS):
-    losses = []
-    colmask = [a != qnum for a in range(N_COLS)]
-    features = train[:, colmask]
-    target = np.array(train[:, qnum], dtype=int)
-    test_features = test[:, colmask]
-    test_target = np.array(test[:, qnum], dtype=int)
-    test_ll = []
-    for n in n_neighbours:
-        clf = KNN(n_neighbours=n)
-        clf.fit(features=features, target=target)
-        probs = clf.predict_proba(features)
-        losses.append(log_loss(target, probs[:, 1]))
-        print(np.unique(test_target))
-        test_ll.append(log_loss(test_target, clf.predict_proba(test_features)))
-    n_chosen = n_neighbours[np.argwhere(np.array(test_ll) == np.amin(test_ll))[0][0]]
 
-    clf = KNN(n_neighbours=n_chosen)
-    clf.fit(features=features, target=target)
-    losses_knn.append(log_loss(test_target, clf.predict_proba(test_features)))
+# load exam
+# define test mask
+# train on train
+# choose on val
+# run all on test
+# this is utterly horrendous, needs refactoring
 
-    lr = LogReg()
-    lr.fit(features=features, target=target)
-    losses_lr.append(log_loss(test_target, lr.predict_proba(test_features)))
+kfolds = 20
+n_pops = [
+    2,
+    4,
+    5,
+    8,
+    10,
+    12,
+    15,
+    18,
+    20,
+    25,
+    50,
+    100,
+]  # the number of populations in the mixture model
+test_dsets = []
+k_by_test = []
+k_choice_by_test = []
+print("beginning knn exploration")
+for pnum in range(13):
+    mask = np.load(f"../data/processed/masks/Exam_{pnum}_Mask.npy")
+    data = np.load(f"../data/processed/binarised/Exam_{pnum}.npy")
+    ref = ~np.isnan(data)[:, 0]
+    itercorr = np.zeros((data.shape[1], data.shape[1]))
+    data = np.array(data[ref, :], dtype=bool)
 
-    by_target.append(losses)
+    train_all, test = train_test_split(data[:, :N_COLS], train_size=0.9)
+    test_dsets.append(test)
+
+    k_choices = []
+    n_choices = []
+
+    for fold in range(kfolds):
+        print("on fold", fold)
+        train, valid = train_test_split(train_all, train_size=0.95)
+        losses_knn = []
+        losses_lr = []
+        k_test_loss = []
+        bmm_bic = []
+        bmm_aic = []
+        for qnum in range(N_COLS):
+            losses = []
+            colmask = [a != qnum for a in range(N_COLS)]
+            print("colmask", colmask)
+            print("invcolmask", ~np.array(colmask))
+            features = train[:, colmask]
+            target = np.array(train[:, qnum], dtype=int)
+            test_features = valid[:, colmask]
+            test_target = np.array(valid[:, qnum], dtype=int)
+            test_ll = []
+            print(f"onto BMM and evaluating question {qnum}")
+            for m in n_pops:
+                # print(m)
+                bmm = BernoulliMixture(
+                    n_components=m, tol=10**-1, max_iter=10**3, use_mlflow=False
+                )
+                bmm.fit(X=train)
+                print(m, " fitted")
+                print(f"The BIC was {bmm.bic}")
+                bmm_bic.append(bmm.bic)
+                bmm_aic.append(bmm.aic)
+                print("attempting pred")
+                preds = bmm.predict(train, pred_mask=~np.array(colmask))
+                print("preds", preds[:5])
+                print("targets", train[:, ~np.array(colmask)][:5])
+                print("biggest prob", np.amax(preds))
+                print("smallest_prob", np.amin(preds))
+
+            quit()
+
+            for n in n_neighbours:
+                clf = KNN(n_neighbours=n)
+                clf.fit(features=features, target=target)
+                probs = clf.predict_proba(features)
+                losses.append(log_loss(target, probs[:, 1]))
+                # print(np.unique(test_target))
+                test_ll.append(log_loss(test_target, clf.predict_proba(test_features)))
+            # have a record of every loss at every n values, for each q target
+            k_test_loss.append(test_ll)
+
+            n_chosen = n_neighbours[
+                np.argwhere(np.array(test_ll) == np.amin(test_ll))[0][0]
+            ]
+            n_choices.append(n_chosen)
+            clf = KNN(n_neighbours=n_chosen)
+            clf.fit(features=features, target=target)
+            losses_knn.append(log_loss(test_target, clf.predict_proba(test_features)))
+
+            lr = LogReg()
+            lr.fit(features=features, target=target)
+            losses_lr.append(log_loss(test_target, lr.predict_proba(test_features)))
+
+            by_target.append(losses)
+        # aggregate each loss-by-k across all folds
+        k_choices.append(k_test_loss)
+    # aggregate each loss by k across exams
+    k_by_test.append(k_choices)
+    k_choice_by_test.append(n_choices)
+
+    results = {
+        "n_neighbours_by_exam": k_choice_by_test,
+        "losses_by_exam": k_by_test,
+        "n_explored": n_neighbours,
+    }
+
+    with open(
+        f"../data/outputs/fits/knn_n_neighbours_performance_{pnum}.json",
+        "w",
+        encoding="utf-8",
+    ) as f:
+        json.dump(results, f)
+
 results = {"n_neighbours": n_neighbours, "log_losses": by_target}
+
+results = {
+    "n_neighbours_by_exam": k_choice_by_test,
+    "losses_by_exam": k_by_test,
+    "n_explored": n_neighbours,
+}
 print(results)
 
 with open(
