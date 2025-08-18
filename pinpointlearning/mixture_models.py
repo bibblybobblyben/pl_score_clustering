@@ -357,7 +357,6 @@ class BernoulliMixture(MixtureModel):
             )
 
         # TODO: how do we allow masking of columns?
-        print("mask", pred_mask)
 
         X_s = np.stack([X[:, ~pred_mask]] * self.n_components, axis=1)
 
@@ -371,17 +370,12 @@ class BernoulliMixture(MixtureModel):
 
         # get the probability of each row belonging to each cluster
         for group in range(self.n_components):
-            print("a", mu[group].shape)
-            print("b", self.cluster_lks[:, group].shape)
             # TODO: make robust to multi column
-            # print("assprob", clusters_lks[:,group][:5])
             group_assignment_prob = (
                 pi[group] * np.array(bernoulli_pr[:, group])
             ).reshape(-1)
 
             raw_assignment_probs[:, group] = group_assignment_prob
-
-        #        totprobs = np.sum(raw_assignment_probs, axis =1)
 
         normed_assignment_probs = raw_assignment_probs / np.sum(
             raw_assignment_probs, axis=1
