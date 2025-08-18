@@ -116,7 +116,7 @@ class BernoulliMixture(MixtureModel):
         """
 
         n_students, n_questions = X.shape
-        self.expected_shape = X.shape
+        self.expected_shape = (":", X.shape[1])
 
         self.q = np.ones([n_students, self.n_components]) / self.n_components
         self.mu = np.random.rand(self.n_components, n_questions)
@@ -350,7 +350,7 @@ class BernoulliMixture(MixtureModel):
             assign a prediction for
         """
 
-        if X.shape != self.expected_shape:
+        if X.shape[1] != self.expected_shape[1]:
             raise ValueError(
                 "Array for prediction needs to be the same shape as "
                 f"training data. Expected {(self.expected_shape)} but got {X.shape}"
