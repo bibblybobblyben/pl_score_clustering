@@ -125,6 +125,7 @@ train, test = train_test_split(traintest, train_size=0.85, random_state=2)
 n_neighbours = list(range(3, 11, 2)) + [a * 10 + 1 for a in range(1, 10)]
 
 n_neighbours = [3, 5, 7, 9, 11, 13, 15, 17, 21, 25, 51, 101, 251]
+n_neighbours = [3, 5]
 by_target = []
 # iterate over papers?
 losses_knn = []
@@ -137,7 +138,7 @@ losses_lr = []
 # run all on test
 # this is utterly horrendous, needs refactoring
 
-kfolds = 20
+kfolds = 2
 n_pops = [
     2,
     4,
@@ -152,11 +153,18 @@ n_pops = [
     50,
     100,
 ]  # the number of populations in the mixture model
+
+n_pops = [2, 8]
+
+BMM_TOL = 10**-3
+BMM_MAX_ITER = 10**3
+
 test_dsets = []
 k_by_test = []
 k_choice_by_test = []
+bmm_by_test = []
 print("beginning knn exploration")
-for pnum in range(13):
+for pnum in range(1):
     mask = np.load(f"../data/processed/masks/Exam_{pnum}_Mask.npy")
     data = np.load(f"../data/processed/binarised/Exam_{pnum}.npy")
     ref = ~np.isnan(data)[:, 0]
@@ -167,7 +175,10 @@ for pnum in range(13):
     test_dsets.append(test)
 
     k_choices = []
+    bmm_ll_by_fold = []
     n_choices = []
+    n_bmm_iters = []
+    min_baseline_scores = []
 
     for fold in range(kfolds):
         print("on fold", fold)
@@ -177,6 +188,9 @@ for pnum in range(13):
         k_test_loss = []
         bmm_bic = []
         bmm_aic = []
+        bmm_ll = []
+        iter_baseline = []
+
         for qnum in range(N_COLS):
             losses = []
             colmask = [a != qnum for a in range(N_COLS)]
@@ -184,29 +198,50 @@ for pnum in range(13):
             print("invcolmask", ~np.array(colmask))
             features = train[:, colmask]
             target = np.array(train[:, qnum], dtype=int)
+            train_freq = np.sum(target) / len(target)
             test_features = valid[:, colmask]
             test_target = np.array(valid[:, qnum], dtype=int)
             test_ll = []
             print(f"onto BMM and evaluating question {qnum}")
+
+            _iter_bmm_bic = []
+            _iter_bmm_aic = []
             for m in n_pops:
-                # print(m)
+                print(f"Fitting {m} clusters")
                 bmm = BernoulliMixture(
-                    n_components=m, tol=10**-1, max_iter=10**3, use_mlflow=False
+                    n_components=m, tol=BMM_TOL, max_iter=BMM_MAX_ITER, use_mlflow=False
                 )
                 bmm.fit(X=train)
-                print(m, " fitted")
-                print(f"The BIC was {bmm.bic}")
-                bmm_bic.append(bmm.bic)
-                bmm_aic.append(bmm.aic)
-                print("attempting pred")
+                print("Model fitted")
+                _iter_bmm_bic.append(bmm.bic)
+                _iter_bmm_aic.append(bmm.aic)
                 preds = bmm.predict(train, pred_mask=~np.array(colmask))
-                print("preds", preds[:5])
-                print("targets", train[:, ~np.array(colmask)][:5])
-                print("biggest prob", np.amax(preds))
-                print("smallest_prob", np.amin(preds))
+                print("Metrics logged")
+                # print("preds", preds[:5])
+                # print("targets", train[:, ~np.array(colmask)][:5])
+                # print("biggest prob", np.amax(preds))
+                # print("smallest_prob", np.amin(preds))
+                # print("target freq", np.mean(train[:, ~np.array(colmask)]))
+                # TODO LOG METRICS
+            bmm_bic.append(_iter_bmm_bic)
+            bmm_aic.append(_iter_bmm_aic)
 
-            quit()
+            n_bmm_chosen = n_pops[np.argmin(_iter_bmm_bic)]
 
+            n_bmm_iters.append(n_bmm_chosen)
+            bmm_trained = BernoulliMixture(
+                n_components=n_bmm_chosen, tol=BMM_TOL, max_iter=BMM_MAX_ITER
+            )
+            bmm_trained.fit(X=train)
+            bmm_preds = bmm_trained.predict(valid, pred_mask=~np.array(colmask))
+            bmm_ll.append(log_loss(test_target, bmm_preds))
+            print("BMM finished")
+
+            iter_baseline.append(
+                log_loss(test_target, train_freq * np.ones(test_target.shape))
+            )
+            print("Training KNN models")
+            min_baseline_scores.append(iter_baseline)
             for n in n_neighbours:
                 clf = KNN(n_neighbours=n)
                 clf.fit(features=features, target=target)
@@ -221,25 +256,40 @@ for pnum in range(13):
                 np.argwhere(np.array(test_ll) == np.amin(test_ll))[0][0]
             ]
             n_choices.append(n_chosen)
+            print("KNN model chosen")
             clf = KNN(n_neighbours=n_chosen)
             clf.fit(features=features, target=target)
             losses_knn.append(log_loss(test_target, clf.predict_proba(test_features)))
+            print("KNN finished")
 
             lr = LogReg()
             lr.fit(features=features, target=target)
             losses_lr.append(log_loss(test_target, lr.predict_proba(test_features)))
 
             by_target.append(losses)
+            print("=====losses for test data======")
+            print("BMM:", bmm_ll[-1])
+            print("LogReg: ", losses_lr[-1])
+            print("KNN: ", losses_knn[-1])
+            print("Minimally informed baseline", iter_baseline[-1])
         # aggregate each loss-by-k across all folds
         k_choices.append(k_test_loss)
+        bmm_ll_by_fold.append(bmm_ll)
     # aggregate each loss by k across exams
     k_by_test.append(k_choices)
     k_choice_by_test.append(n_choices)
+    bmm_by_test.append(bmm_ll_by_fold)
+
+    # We want to know the log loss for each model, across all qs and folds
 
     results = {
         "n_neighbours_by_exam": k_choice_by_test,
         "losses_by_exam": k_by_test,
         "n_explored": n_neighbours,
+        "bmm_ll": bmm_by_test,
+        "bmm_n_components": n_bmm_iters,
+        "logreg_ll": losses_lr,
+        "baseline_ll": min_baseline_scores,
     }
 
     with open(
@@ -248,6 +298,9 @@ for pnum in range(13):
         encoding="utf-8",
     ) as f:
         json.dump(results, f)
+
+
+quit()
 
 results = {"n_neighbours": n_neighbours, "log_losses": by_target}
 
