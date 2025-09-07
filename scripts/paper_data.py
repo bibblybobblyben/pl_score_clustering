@@ -377,23 +377,23 @@ for pnum in range(14):
 
         lr = LogReg()
         lr.fit(features=train_all[:, colmask], target=train_all[:, qnum])
-        logreg_valid_scores.log_metrics(
+        logreg_test_scores.log_metrics(
             question_test_target, lr.predict_proba(question_test_features)[:, 1]
         )  # TODO makesure this is class 1
 
         # Baseline test performance
         train_freq = np.sum(train_all[qnum]) / len(train_all[qnum])
-        baseline_valid_scores.log_metrics(
+        baseline_test_scores.log_metrics(
             question_test_target, train_freq * np.ones(question_test_target.shape)
         )
 
-    bmm_results = logreg_test_scores.output_metrics()
+    bmm_results = bmm_test_scores.output_metrics()
     # bmm_results["chosen_n"] = n_bmms
 
     knn_results = knn_test_scores.output_metrics()
     # knn_results["chosen_n"] = n_knns
 
-    results[f"Question{qnum}_test"] = {
+    results["AllQuestions_test_performance"] = {
         "log_reg": logreg_test_scores.output_metrics(),
         "bmm": bmm_results,
         "knn": knn_results,
