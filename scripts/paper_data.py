@@ -265,12 +265,12 @@ for pnum in range(14):
             iter_train_target = np.array(fold_train[:, qnum], dtype=int)  # train target
             iter_valid_features = fold_valid[:, colmask]  # validation
             iter_valid_target = np.array(fold_valid[:, qnum], dtype=int)
+
+            ######### BMM Model evalution #########
             print(f"onto BMM and evaluating question {qnum}")
 
             n_bmm_chosen = choose_bmm_n(train=fold_train, n_pops_try=n_pops)
-
             n_bmms.append(n_bmm_chosen)
-
             n_bmm_iters.append(n_bmm_chosen)
             bmm_trained = BernoulliMixture(
                 n_components=n_bmm_chosen, tol=BMM_TOL, max_iter=BMM_MAX_ITER
@@ -281,12 +281,14 @@ for pnum in range(14):
             bmm_test_scores.log_metrics(iter_valid_target, bmm_preds)
             print("BMM finished")
 
+            ######### Baseline evalution #########
             train_freq = np.sum(iter_train_target) / len(iter_train_target)
             baseline_test_scores.log_metrics(
                 iter_valid_target, train_freq * np.ones(iter_valid_target.shape)
             )
             print("baseline logged")
 
+            ######### KNN Model evalution #########
             print("Training KNN models")
             test_ll = []
 
@@ -308,6 +310,7 @@ for pnum in range(14):
             #    ) #TODO is this right?
             # print("KNN finished")
 
+            ######### LogReg Model evalution #########
             lr = LogReg()
             lr.fit(features=iter_train_features, target=iter_train_target)
             logreg_test_scores.log_metrics(
@@ -333,63 +336,3 @@ for pnum in range(14):
         encoding="utf-8",
     ) as f:
         json.dump(results, f)
-
-    # aggregate each loss by k across exams
-    # k_by_test.append(k_choices)
-    # k_choice_by_test.append(n_choices)
-    # bmm_by_test.append(bmm_ll_by_fold)
-
-    # We want to know the log loss for each model, across all qs and folds
-
-    # results = {
-    #    "n_neighbours_by_exam": k_choice_by_test,
-    #    "losses_by_exam": k_by_test,
-    #    "n_explored": n_neighbours,
-    #    "bmm_ll": bmm_by_test,
-    #    "bmm_n_components": n_bmm_iters,
-    #    "logreg_ll": losses_lr,
-    #    "baseline_ll": min_baseline_scores,
-    # }
-
-    # with open(
-    #    f"../data/outputs/fits/knn_n_neighbours_performance_{pnum}.json",
-    #    "w",
-    #    encoding="utf-8",
-    # ) as f:
-    #    json.dump(results, f)
-
-
-quit()
-
-results = {"n_neighbours": n_neighbours, "log_losses": by_target}
-
-results = {
-    "n_neighbours_by_exam": k_choice_by_test,
-    "losses_by_exam": k_by_test,
-    "n_explored": n_neighbours,
-}
-print(results)
-
-with open(
-    "../data/outputs/knn_n_neighbours_performance.json", "w", encoding="utf-8"
-) as f:
-    json.dump(results, f)
-
-
-###
-# Compare all models in a single plot
-###
-
-knn = KNN(n_neighbours=25)
-knn.fit(features=features, target=target)
-lr = LogReg()
-lr.fit(features=features, target=target)
-model_names = ["LogReg", "KNN"]
-performances = [
-    log_loss(target, lr.predict_proba(features)[:, 1]),
-    log_loss(target, knn.predict_proba(features)[:, 1]),
-]
-
-results = {"model_names": model_names, "log_losses": performances}
-with open("../data/outputs/model_comparison.json", "w", encoding="utf-8") as f:
-    json.dump(results, f)
