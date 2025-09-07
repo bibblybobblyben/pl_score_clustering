@@ -9,10 +9,9 @@ import pandas as pd
 from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
 from pinpointlearning.model import LogReg, KNN
-from pinpointlearning.utils import load_sample_data
+from pinpointlearning.utils import load_sample_data, MetricLogger
 from pinpointlearning.mixture_models import BernoulliMixture
 
-# quit()
 #####
 # Data description plots
 ######
@@ -114,7 +113,7 @@ target = target / np.amax(target)
 target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
 
 traintest, val = train_test_split(data, train_size=0.9, random_state=2)
-train, test = train_test_split(traintest, train_size=0.85, random_state=2)
+# train, test = train_test_split(traintest, train_size=0.85, random_state=2)
 
 
 ###
@@ -125,7 +124,7 @@ train, test = train_test_split(traintest, train_size=0.85, random_state=2)
 n_neighbours = list(range(3, 11, 2)) + [a * 10 + 1 for a in range(1, 10)]
 
 n_neighbours = [3, 5, 7, 9, 11, 13, 15, 17, 21, 25, 51, 101, 251]
-n_neighbours = [3, 5]
+n_neighbours = [3, 5, 11, 17, 25]
 by_target = []
 # iterate over papers?
 losses_knn = []
@@ -138,7 +137,6 @@ losses_lr = []
 # run all on test
 # this is utterly horrendous, needs refactoring
 
-kfolds = 2
 n_pops = [
     2,
     4,
@@ -154,24 +152,91 @@ n_pops = [
     100,
 ]  # the number of populations in the mixture model
 
-n_pops = [2, 8]
+n_pops = [2, 4]  # , 8, 16, 32]
 
-BMM_TOL = 10**-3
-BMM_MAX_ITER = 10**3
+BMM_TOL = 10**-1
+BMM_MAX_ITER = 10**1
+KFOLDS = 4
+
 
 test_dsets = []
 k_by_test = []
 k_choice_by_test = []
 bmm_by_test = []
+
+
+def choose_knn_n(
+    train_features, train_target, valid_features, valid_target, n_neighbours_try
+):
+    """Iterate through the number of nearest neighbours to use in a KNN model
+    and choose the best fitting model according to performance on the
+    validation data, using log loss as the criterion.
+
+    Args:
+        train_features (_type_): Features for training the model
+        train_target (_type_): Target variable for training
+        valid_features (_type_): Features of the validation set
+        valid_target (_type_): Target variable of the validation set
+        n_neighbours (_type_): Candidate list of number of nearest neighbours
+
+    Returns:
+        int: Best fitting number of nearest neighbours
+    """
+
+    losses = []
+    ll = []
+    for n in n_neighbours_try:
+        _clf = KNN(n_neighbours=n)
+        _clf.fit(features=train_features, target=train_target)
+        probs = _clf.predict_proba(train_features)
+        losses.append(log_loss(train_target, probs[:, 1]))
+        ll.append(log_loss(valid_target, _clf.predict_proba(valid_features)))
+
+    n_chosen = n_neighbours_try[np.argwhere(np.array(ll) == np.amin(ll))[0][0]]
+
+    return n_chosen
+
+
+def choose_bmm_n(train, n_pops_try):
+    """Iterate through potential Bernoulli Mixture Models and return the
+    number of clusters that achieve the best BIC.
+
+    Args:
+        train (_type_): Training data
+        valid: Data to evaluate the trained models on
+        colmask (_type_): Which columns
+        n_pops (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    _iter_bmm_bic = []
+    # _iter_bmm_aic = []
+    for m in n_pops_try:
+        print(f"Fitting {m} clusters")
+        bmm = BernoulliMixture(
+            n_components=m, tol=BMM_TOL, max_iter=BMM_MAX_ITER, use_mlflow=False
+        )
+        bmm.fit(X=train)
+        _iter_bmm_bic.append(bmm.bic)
+        # _iter_bmm_aic.append(bmm.aic)
+        # preds = bmm.predict(train, pred_mask=~np.array(colmask))
+
+    return n_pops_try[np.argmin(_iter_bmm_bic)]
+
+
 print("beginning knn exploration")
-for pnum in range(1):
+for pnum in range(14):
     mask = np.load(f"../data/processed/masks/Exam_{pnum}_Mask.npy")
     data = np.load(f"../data/processed/binarised/Exam_{pnum}.npy")
+
     ref = ~np.isnan(data)[:, 0]
-    itercorr = np.zeros((data.shape[1], data.shape[1]))
+    # itercorr = np.zeros((data.shape[1], data.shape[1]))
+
     data = np.array(data[ref, :], dtype=bool)
 
     train_all, test = train_test_split(data[:, :N_COLS], train_size=0.9)
+
     test_dsets.append(test)
 
     k_choices = []
@@ -180,124 +245,118 @@ for pnum in range(1):
     n_bmm_iters = []
     min_baseline_scores = []
 
-    for fold in range(kfolds):
-        print("on fold", fold)
-        train, valid = train_test_split(train_all, train_size=0.95)
-        losses_knn = []
-        losses_lr = []
-        k_test_loss = []
-        bmm_bic = []
-        bmm_aic = []
-        bmm_ll = []
-        iter_baseline = []
+    logreg_test_scores = MetricLogger()
+    knn_test_scores = MetricLogger()
+    bmm_test_scores = MetricLogger()
+    baseline_test_scores = MetricLogger()
 
+    for fold in range(KFOLDS):
+        print("on fold", fold)
+        fold_train, fold_valid = train_test_split(
+            train_all, train_size=1.0 - (1.0 / KFOLDS)
+        )
+
+        n_bmms = []
+        n_knns = []
         for qnum in range(N_COLS):
-            losses = []
+            # losses = []
             colmask = [a != qnum for a in range(N_COLS)]
-            print("colmask", colmask)
-            print("invcolmask", ~np.array(colmask))
-            features = train[:, colmask]
-            target = np.array(train[:, qnum], dtype=int)
-            train_freq = np.sum(target) / len(target)
-            test_features = valid[:, colmask]
-            test_target = np.array(valid[:, qnum], dtype=int)
-            test_ll = []
+            iter_train_features = fold_train[:, colmask]
+            iter_train_target = np.array(fold_train[:, qnum], dtype=int)  # train target
+            iter_valid_features = fold_valid[:, colmask]  # validation
+            iter_valid_target = np.array(fold_valid[:, qnum], dtype=int)
             print(f"onto BMM and evaluating question {qnum}")
 
-            _iter_bmm_bic = []
-            _iter_bmm_aic = []
-            for m in n_pops:
-                print(f"Fitting {m} clusters")
-                bmm = BernoulliMixture(
-                    n_components=m, tol=BMM_TOL, max_iter=BMM_MAX_ITER, use_mlflow=False
-                )
-                bmm.fit(X=train)
-                print("Model fitted")
-                _iter_bmm_bic.append(bmm.bic)
-                _iter_bmm_aic.append(bmm.aic)
-                preds = bmm.predict(train, pred_mask=~np.array(colmask))
-                print("Metrics logged")
-                # print("preds", preds[:5])
-                # print("targets", train[:, ~np.array(colmask)][:5])
-                # print("biggest prob", np.amax(preds))
-                # print("smallest_prob", np.amin(preds))
-                # print("target freq", np.mean(train[:, ~np.array(colmask)]))
-                # TODO LOG METRICS
-            bmm_bic.append(_iter_bmm_bic)
-            bmm_aic.append(_iter_bmm_aic)
+            n_bmm_chosen = choose_bmm_n(train=fold_train, n_pops_try=n_pops)
 
-            n_bmm_chosen = n_pops[np.argmin(_iter_bmm_bic)]
+            n_bmms.append(n_bmm_chosen)
 
             n_bmm_iters.append(n_bmm_chosen)
             bmm_trained = BernoulliMixture(
                 n_components=n_bmm_chosen, tol=BMM_TOL, max_iter=BMM_MAX_ITER
             )
-            bmm_trained.fit(X=train)
-            bmm_preds = bmm_trained.predict(valid, pred_mask=~np.array(colmask))
-            bmm_ll.append(log_loss(test_target, bmm_preds))
+            bmm_trained.fit(X=fold_train)
+            bmm_preds = bmm_trained.predict(fold_valid, pred_mask=~np.array(colmask))
+
+            bmm_test_scores.log_metrics(iter_valid_target, bmm_preds)
             print("BMM finished")
 
-            iter_baseline.append(
-                log_loss(test_target, train_freq * np.ones(test_target.shape))
+            train_freq = np.sum(iter_train_target) / len(iter_train_target)
+            baseline_test_scores.log_metrics(
+                iter_valid_target, train_freq * np.ones(iter_valid_target.shape)
             )
-            print("Training KNN models")
-            min_baseline_scores.append(iter_baseline)
-            for n in n_neighbours:
-                clf = KNN(n_neighbours=n)
-                clf.fit(features=features, target=target)
-                probs = clf.predict_proba(features)
-                losses.append(log_loss(target, probs[:, 1]))
-                # print(np.unique(test_target))
-                test_ll.append(log_loss(test_target, clf.predict_proba(test_features)))
-            # have a record of every loss at every n values, for each q target
-            k_test_loss.append(test_ll)
+            print("baseline logged")
 
-            n_chosen = n_neighbours[
-                np.argwhere(np.array(test_ll) == np.amin(test_ll))[0][0]
-            ]
-            n_choices.append(n_chosen)
+            print("Training KNN models")
+            test_ll = []
+
+            n_knn_opt = choose_knn_n(
+                train_features=iter_train_features,
+                train_target=iter_train_target,
+                valid_features=iter_valid_features,
+                valid_target=iter_valid_target,
+                n_neighbours_try=n_neighbours,
+            )
+            n_knns.append(n_knn_opt)
             print("KNN model chosen")
-            clf = KNN(n_neighbours=n_chosen)
+            clf = KNN(n_neighbours=n_knn_opt)
             clf.fit(features=features, target=target)
-            losses_knn.append(log_loss(test_target, clf.predict_proba(test_features)))
-            print("KNN finished")
+
+            # TODO fix this to log right metric
+            # knn_test_scores.log_metrics(
+            #    test_target, clf.predict_proba(test_features)[:,1]
+            #    ) #TODO is this right?
+            # print("KNN finished")
 
             lr = LogReg()
-            lr.fit(features=features, target=target)
-            losses_lr.append(log_loss(test_target, lr.predict_proba(test_features)))
+            lr.fit(features=iter_train_features, target=iter_train_target)
+            logreg_test_scores.log_metrics(
+                iter_valid_target, lr.predict_proba(iter_valid_features)[:, 1]
+            )  # TODO makesure this is class 1
 
-            by_target.append(losses)
-            print("=====losses for test data======")
-            print("BMM:", bmm_ll[-1])
-            print("LogReg: ", losses_lr[-1])
-            print("KNN: ", losses_knn[-1])
-            print("Minimally informed baseline", iter_baseline[-1])
-        # aggregate each loss-by-k across all folds
-        k_choices.append(k_test_loss)
-        bmm_ll_by_fold.append(bmm_ll)
-    # aggregate each loss by k across exams
-    k_by_test.append(k_choices)
-    k_choice_by_test.append(n_choices)
-    bmm_by_test.append(bmm_ll_by_fold)
+    bmm_results = logreg_test_scores.output_metrics()
+    bmm_results["chosen_n"] = n_bmms
 
-    # We want to know the log loss for each model, across all qs and folds
+    knn_results = knn_test_scores.output_metrics()
+    knn_results["chosen_n"] = n_knns
 
     results = {
-        "n_neighbours_by_exam": k_choice_by_test,
-        "losses_by_exam": k_by_test,
-        "n_explored": n_neighbours,
-        "bmm_ll": bmm_by_test,
-        "bmm_n_components": n_bmm_iters,
-        "logreg_ll": losses_lr,
-        "baseline_ll": min_baseline_scores,
+        "log_reg": logreg_test_scores.output_metrics(),
+        "bmm": bmm_results,
+        "knn": knn_results,
+        "baseline": baseline_test_scores.output_metrics(),
     }
 
     with open(
-        f"../data/outputs/fits/knn_n_neighbours_performance_{pnum}.json",
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
         "w",
         encoding="utf-8",
     ) as f:
         json.dump(results, f)
+
+    # aggregate each loss by k across exams
+    # k_by_test.append(k_choices)
+    # k_choice_by_test.append(n_choices)
+    # bmm_by_test.append(bmm_ll_by_fold)
+
+    # We want to know the log loss for each model, across all qs and folds
+
+    # results = {
+    #    "n_neighbours_by_exam": k_choice_by_test,
+    #    "losses_by_exam": k_by_test,
+    #    "n_explored": n_neighbours,
+    #    "bmm_ll": bmm_by_test,
+    #    "bmm_n_components": n_bmm_iters,
+    #    "logreg_ll": losses_lr,
+    #    "baseline_ll": min_baseline_scores,
+    # }
+
+    # with open(
+    #    f"../data/outputs/fits/knn_n_neighbours_performance_{pnum}.json",
+    #    "w",
+    #    encoding="utf-8",
+    # ) as f:
+    #    json.dump(results, f)
 
 
 quit()
