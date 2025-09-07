@@ -6,6 +6,14 @@ import numpy as np
 from k_means_constrained import KMeansConstrained
 from itertools import permutations, product
 
+from sklearn.metrics import (
+    log_loss,
+    accuracy_score,
+    recall_score,
+    f1_score,
+    matthews_corrcoef,
+)
+
 # pylint: disable = C0103
 
 
@@ -202,7 +210,7 @@ def assign_vector_mapping(
                 sim_matrix[i, j] = metric(v1, v2)
         if minimise:
             if force_unique:
-                for n in range(len(vecs_in)):
+                for _ in range(len(vecs_in)):
                     coords = np.where(sim_matrix == np.amin(sim_matrix))
                     map_dict[coords[0][0]] = coords[1][0]
                     sim_matrix[:, coords[1][0]] = np.inf
@@ -217,8 +225,8 @@ def assign_vector_mapping(
                     sim_matrix[:, coords[1][0]] = 0.0
                     sim_matrix[coords[0][0], :] = 0.0
             else:
-                for i in range(len(vecs_in)):
-                    map_dict[i] = np.argmax(sim_matrix[i, :])
+                for k in range(len(vecs_in)):
+                    map_dict[k] = np.argmax(sim_matrix[k, :])
 
     return map_dict
 
@@ -287,3 +295,31 @@ def calculate_scores(vecs_1, vecs_2, vecs_map, metric=norm_difference):
     for vecs_1_i, vecs_2_i in vecs_map.items():
         scores.append(metric(vecs_1[vecs_1_i], vecs_2[vecs_2_i]))
     return np.array(scores)
+
+
+class MetricLogger:
+    def __init__(self):
+        self.ll = []
+        self.accs = []
+        self.recalls = []
+        self.f1s = []
+        self.mattcorrs = []
+
+    def metrics_func(self, true, preds):
+        self.ll.append(log_loss(true, preds))
+        self.accs.append(accuracy_score(true, preds > 0.5))
+        self.recalls.append(recall_score(true, preds > 0.5))
+        self.f1s.append(f1_score(true, preds > 0.5))
+        self.mattcorrs.append(matthews_corrcoef(true, preds > 0.5))
+
+    def log_metrics(self, true_test, preds_test):
+        self.metrics_func(true_test, preds_test)
+
+    def output_metrics(self):
+        return {
+            "log_loss": self.ll,
+            "accuracy": self.accs,
+            "recall": self.recalls,
+            "f1s": self.f1s,
+            "matthews_corrcoef": self.mattcorrs,
+        }
