@@ -126,7 +126,6 @@ n_neighbours = list(range(3, 11, 2)) + [a * 10 + 1 for a in range(1, 10)]
 n_neighbours = [3, 5, 7, 9, 11, 13, 15, 17, 21, 25, 51, 101, 251]
 n_neighbours = [3, 5, 11, 17, 25]
 by_target = []
-# iterate over papers?
 losses_knn = []
 losses_lr = []
 
@@ -135,7 +134,7 @@ losses_lr = []
 # train on train
 # choose on val
 # run all on test
-# this is utterly horrendous, needs refactoring
+
 
 n_pops = [
     2,
@@ -250,17 +249,17 @@ for pnum in range(14):
     bmm_test_scores = MetricLogger()
     baseline_test_scores = MetricLogger()
 
-    for fold in range(KFOLDS):
-        print("on fold", fold)
-        fold_train, fold_valid = train_test_split(
-            train_all, train_size=1.0 - (1.0 / KFOLDS)
-        )
+    for qnum in range(N_COLS):
 
+        colmask = [a != qnum for a in range(N_COLS)]
         n_bmms = []
         n_knns = []
-        for qnum in range(N_COLS):
-            # losses = []
-            colmask = [a != qnum for a in range(N_COLS)]
+        for fold in range(KFOLDS):
+            print("on fold", fold)
+            fold_train, fold_valid = train_test_split(
+                train_all, train_size=1.0 - (1.0 / KFOLDS)
+            )
+
             iter_train_features = fold_train[:, colmask]
             iter_train_target = np.array(fold_train[:, qnum], dtype=int)  # train target
             iter_valid_features = fold_valid[:, colmask]  # validation
