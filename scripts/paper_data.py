@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
+from scipy.stats import mode
 from pinpointlearning.model import LogReg, KNN
 from pinpointlearning.utils import load_sample_data, MetricLogger
 from pinpointlearning.mixture_models import BernoulliMixture
@@ -224,7 +225,7 @@ def choose_bmm_n(train, n_pops_try):
     return n_pops_try[np.argmin(_iter_bmm_bic)]
 
 
-print("beginning knn exploration")
+print("Iterating through model performances.")
 for pnum in range(14):
     mask = np.load(f"../data/processed/masks/Exam_{pnum}_Mask.npy")
     data = np.load(f"../data/processed/binarised/Exam_{pnum}.npy")
@@ -249,12 +250,23 @@ for pnum in range(14):
     bmm_test_scores = MetricLogger()
     baseline_test_scores = MetricLogger()
 
-    for qnum in range(N_COLS):
+    results = {}
+
+    for qnum in range(3):
+        print(f" evaluating question {qnum}")
+        logreg_valid_scores = MetricLogger()
+        knn_valid_scores = MetricLogger()
+        bmm_valid_scores = MetricLogger()
+        baseline_valid_scores = MetricLogger()
 
         colmask = [a != qnum for a in range(N_COLS)]
         n_bmms = []
         n_knns = []
         for fold in range(KFOLDS):
+            logreg_fold_scores = MetricLogger()
+            knn_fold_scores = MetricLogger()
+            bmm_fold_scores = MetricLogger()
+            baseline_fold_scores = MetricLogger()
             print("on fold", fold)
             fold_train, fold_valid = train_test_split(
                 train_all, train_size=1.0 - (1.0 / KFOLDS)
@@ -266,7 +278,7 @@ for pnum in range(14):
             iter_valid_target = np.array(fold_valid[:, qnum], dtype=int)
 
             ######### BMM Model evalution #########
-            print(f"onto BMM and evaluating question {qnum}")
+            print("onto BMM ")
 
             n_bmm_chosen = choose_bmm_n(train=fold_train, n_pops_try=n_pops)
             n_bmms.append(n_bmm_chosen)
@@ -277,12 +289,12 @@ for pnum in range(14):
             bmm_trained.fit(X=fold_train)
             bmm_preds = bmm_trained.predict(fold_valid, pred_mask=~np.array(colmask))
 
-            bmm_test_scores.log_metrics(iter_valid_target, bmm_preds)
+            bmm_valid_scores.log_metrics(iter_valid_target, bmm_preds)
             print("BMM finished")
 
             ######### Baseline evalution #########
             train_freq = np.sum(iter_train_target) / len(iter_train_target)
-            baseline_test_scores.log_metrics(
+            baseline_valid_scores.log_metrics(
                 iter_valid_target, train_freq * np.ones(iter_valid_target.shape)
             )
             print("baseline logged")
@@ -301,28 +313,87 @@ for pnum in range(14):
             n_knns.append(n_knn_opt)
             print("KNN model chosen")
             clf = KNN(n_neighbours=n_knn_opt)
-            clf.fit(features=features, target=target)
+            clf.fit(features=iter_train_features, target=iter_train_target)
 
             # TODO fix this to log right metric
-            # knn_test_scores.log_metrics(
-            #    test_target, clf.predict_proba(test_features)[:,1]
-            #    ) #TODO is this right?
-            # print("KNN finished")
+            knn_valid_scores.log_metrics(
+                iter_valid_target, clf.predict_proba(iter_valid_features)[:, 1]
+            )  # TODO is this indexing right?
+            print("KNN finished")
 
             ######### LogReg Model evalution #########
             lr = LogReg()
             lr.fit(features=iter_train_features, target=iter_train_target)
-            logreg_test_scores.log_metrics(
+            logreg_valid_scores.log_metrics(
                 iter_valid_target, lr.predict_proba(iter_valid_features)[:, 1]
             )  # TODO makesure this is class 1
 
+        bmm_results = logreg_valid_scores.output_metrics()
+        bmm_results["chosen_n"] = n_bmms
+
+        knn_results = knn_valid_scores.output_metrics()
+        knn_results["chosen_n"] = n_knns
+
+        results[f"Question{qnum}_validation"] = {
+            "log_reg": logreg_valid_scores.output_metrics(),
+            "bmm": bmm_results,
+            "knn": knn_results,
+            "baseline": baseline_valid_scores.output_metrics(),
+        }
+
+        # Calculate test performance
+        question_test_features = test[:, colmask]  # validation
+        question_test_target = np.array(test[:, qnum], dtype=int)
+
+        print("mode looks like")
+        print(mode(n_knns))
+        print("othe rmode looks like")
+        print(mode(n_bmms))
+        print("accessed looks like")
+        print(mode(n_bmms).mode)
+        opt_nknn = mode(n_knns).mode
+        opt_nbmm = mode(n_bmms).mode
+
+        # run on test data, log, make plots, bang done
+        # BMM test performance
+        bmm_trained = BernoulliMixture(
+            n_components=opt_nbmm, tol=BMM_TOL, max_iter=BMM_MAX_ITER
+        )
+        bmm_trained.fit(X=train_all)
+        bmm_preds = bmm_trained.predict(test, pred_mask=~np.array(colmask))
+        bmm_test_scores.log_metrics(question_test_target, bmm_preds)
+
+        # KNN test performance
+
+        clf = KNN(n_neighbours=opt_nknn)
+        clf.fit(features=train_all[:, colmask], target=train_all[:, qnum])
+
+        # TODO fix this to log right metric
+        knn_test_scores.log_metrics(
+            question_test_target, clf.predict_proba(question_test_features)[:, 1]
+        )  # TODO is this indexing right?
+
+        # LR test performance
+
+        lr = LogReg()
+        lr.fit(features=train_all[:, colmask], target=train_all[:, qnum])
+        logreg_valid_scores.log_metrics(
+            question_test_target, lr.predict_proba(question_test_features)[:, 1]
+        )  # TODO makesure this is class 1
+
+        # Baseline test performance
+        train_freq = np.sum(train_all[qnum]) / len(train_all[qnum])
+        baseline_valid_scores.log_metrics(
+            question_test_target, train_freq * np.ones(question_test_target.shape)
+        )
+
     bmm_results = logreg_test_scores.output_metrics()
-    bmm_results["chosen_n"] = n_bmms
+    # bmm_results["chosen_n"] = n_bmms
 
     knn_results = knn_test_scores.output_metrics()
-    knn_results["chosen_n"] = n_knns
+    # knn_results["chosen_n"] = n_knns
 
-    results = {
+    results[f"Question{qnum}_test"] = {
         "log_reg": logreg_test_scores.output_metrics(),
         "bmm": bmm_results,
         "knn": knn_results,
@@ -335,3 +406,4 @@ for pnum in range(14):
         encoding="utf-8",
     ) as f:
         json.dump(results, f)
+    quit()
