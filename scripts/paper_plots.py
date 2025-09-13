@@ -266,3 +266,58 @@ fig.delaxes(ax[13])
 fig.delaxes(ax[14])
 fig.tight_layout()
 fig.savefig("../figs/KNN_nchosen_by_exam.png", dpi=300)
+
+##How does each model do on test data?
+
+fig, ax = plt.subplots(nrows=3, ncols=4, figsize=(16, 12), dpi=300)
+ax = ax.ravel()
+for pnum in range(1):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+    print(np.array(df["log_reg"]["log_loss"]).flatten().shape)
+    ys = [
+        np.mean(np.array(df["log_reg"]["log_loss"]).flatten()),
+        np.mean(np.array(df["bmm"]["log_loss"]).flatten()),
+        np.mean(np.array(df["knn"]["log_loss"]).flatten()),
+        np.mean(np.array(df["baseline"]["log_loss"]).flatten()),
+    ]
+
+    # TODO: Take from actual errors
+    yerrs = [
+        np.std(np.array(df["log_reg"]["log_loss"]).flatten()),
+        np.std(np.array(df["bmm"]["log_loss"]).flatten()),
+        np.std(np.array(df["knn"]["log_loss"]).flatten()),
+        np.std(np.array(df["baseline"]["log_loss"]).flatten()),
+    ]
+    x_labels = ["LogReg", "BMM", "KNN", "Baseline"]
+    x_pos = [1, 2, 3, 4]
+    ax[pnum].scatter(x_pos, ys, c="hcdarknavy")
+    ax[pnum].errorbar(
+        x=x_pos,
+        y=ys,
+        yerr=yerrs,
+        markersize=0,
+        linewidth=0,
+        elinewidth=2,
+        capsize=4,
+        capthick=2,
+        ecolor="hcdarknavy",
+    )
+    ax[pnum].set_xticks(x_pos, labels=x_labels)
+    ax[pnum].set_ylabel("Log loss")
+
+fig.savefig("../figs/ModelTestPerformances_logloss_ByExam.png")
+
+
+# How does the performance aggregate in total? for each of the metrics
+
+# How many clusters are chosen by the bmm for each exam?
+
+
+# What do the cluster profiles look like?
+
+# How does test performance compare to validation performance?
