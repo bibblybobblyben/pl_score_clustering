@@ -6,6 +6,8 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import pinpointlearning as pl
+from math import ceil
+
 
 ###
 # Compare all of the models on a single figure
@@ -278,7 +280,6 @@ for pnum in range(1):
     ) as f:
         results = json.load(f)
     df = results["AllQuestions_test_performance"]
-    print(np.array(df["log_reg"]["log_loss"]).flatten().shape)
     ys = [
         np.mean(np.array(df["log_reg"]["log_loss"]).flatten()),
         np.mean(np.array(df["bmm"]["log_loss"]).flatten()),
@@ -310,6 +311,8 @@ for pnum in range(1):
     ax[pnum].set_xticks(x_pos, labels=x_labels)
     ax[pnum].set_ylabel("Log loss")
 
+# ax aggregated across all?
+
 fig.savefig("../figs/ModelTestPerformances_logloss_ByExam.png")
 
 
@@ -317,7 +320,66 @@ fig.savefig("../figs/ModelTestPerformances_logloss_ByExam.png")
 
 # How many clusters are chosen by the bmm for each exam?
 
+fig, ax = plt.subplots(nrows=5, ncols=3, figsize=(15, 8))
+ax = ax.ravel()
+
+
+n_picked = []
+for pnum in range(1):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+
+    ax[pnum].hist(df["bmm"]["chosen_n"])
+    ax[pnum].set_xlabel("Number of clusters chosen")
+    ax[pnum].set_ylabel("Frequency")
+    ax[pnum].set_title(f"Exam {pnum}")
+    n_picked.extend(df["bmm"]["chosen_n"])
+
+ax[-1].hist(n_picked)
+ax[-1].set_ylabel("Frequency")
+ax[-1].set_xlabel("Number of clusters")
+ax[-1].set_title("All exams")
+
+fig.savefig("../figs/ModelTestPerformances_BMM_N_clusters_by_Exam.png")
+
 
 # What do the cluster profiles look like?
+
+with open(
+    f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+    encoding="utf-8",
+) as f:
+    results = json.load(f)
+df = results["AllQuestions_test_performance"]
+
+cluster_coords = df["bmm"]["cluster_coords"][0]  # need to choose a q number, 0
+
+n_cls = len(cluster_coords)
+fig, ax = plt.subplots(
+    nrows=ceil(n_cls / 4.0),
+    ncols=4,
+    figsize=(n_cls / 4, 8),
+    dpi=300,
+    sharex=True,
+    sharey=True,
+)
+
+ax = ax.ravel()
+
+print(cluster_coords[0, :])
+
+for mu in range(n_cls):
+    ax[mu].plot(cluster_coords[mu, :])
+    if mu % 4 == 0:
+        ax[mu].set_ylabel("Probability")
+    if mu > n_cls - 4:
+        ax[mu].set_xlabel("Question number")
+
+fig.savefig("../figs/ModelTestPerformances_Example_BMM_cluster_coords.png")
+
 
 # How does test performance compare to validation performance?
