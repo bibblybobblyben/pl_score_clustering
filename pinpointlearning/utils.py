@@ -1,10 +1,9 @@
 """
 Utility functions for creating the exam analysis tools.
 """
-
-import numpy as np
 from k_means_constrained import KMeansConstrained
 from itertools import permutations, product
+import numpy as np
 
 from sklearn.metrics import (
     log_loss,
@@ -182,6 +181,7 @@ def assign_vector_mapping(
     Returns:
         _type_: Dict mapping {vector index in vecs_in : vector index in vecs_match}
     """
+    # pylint: disable = R0912
     map_dict = {}
 
     if try_all:
@@ -208,25 +208,26 @@ def assign_vector_mapping(
         for i, v1 in enumerate(vecs_in):
             for j, v2 in enumerate(vecs_match):
                 sim_matrix[i, j] = metric(v1, v2)
-        if minimise:
-            if force_unique:
-                for _ in range(len(vecs_in)):
-                    coords = np.where(sim_matrix == np.amin(sim_matrix))
-                    map_dict[coords[0][0]] = coords[1][0]
-                    sim_matrix[:, coords[1][0]] = np.inf
-                    sim_matrix[coords[0][0], :] = np.inf
+        for i, v1 in enumerate(vecs_in):
+            if minimise:
+                if force_unique:
+                    for _ in range(len(vecs_in)):
+                        coords = np.where(sim_matrix == np.amin(sim_matrix))
+                        map_dict[coords[0][0]] = coords[1][0]
+                        sim_matrix[:, coords[1][0]] = np.inf
+                        sim_matrix[coords[0][0], :] = np.inf
+                else:
+                    map_dict[i] = np.argmin(sim_matrix)
             else:
-                map_dict[i] = np.argmin(sim_matrix)
-        else:
-            if force_unique:
-                for n in range(len(vecs_in)):
-                    coords = np.where(sim_matrix == np.amax(sim_matrix))
-                    map_dict[coords[0][0]] = coords[1][0]
-                    sim_matrix[:, coords[1][0]] = 0.0
-                    sim_matrix[coords[0][0], :] = 0.0
-            else:
-                for k in range(len(vecs_in)):
-                    map_dict[k] = np.argmax(sim_matrix[k, :])
+                if force_unique:
+                    for _ in range(len(vecs_in)):
+                        coords = np.where(sim_matrix == np.amax(sim_matrix))
+                        map_dict[coords[0][0]] = coords[1][0]
+                        sim_matrix[:, coords[1][0]] = 0.0
+                        sim_matrix[coords[0][0], :] = 0.0
+                else:
+                    for k in range(len(vecs_in)):
+                        map_dict[k] = np.argmax(sim_matrix[k, :])
 
     return map_dict
 
@@ -262,12 +263,8 @@ def match_vectors(vecs_1, vecs_2):
 
     # K-means doesn't necessarily maintain original ordering
     # Mapping from original ordering to labels to other list of vectors
-    vecs_1_to_labels = {
-        vecs_1: lab for vecs_1, lab in zip(range(0, n_vecs_1), vecs_1_labels)
-    }
-    labels_to_vecs_2 = {
-        lab: vecs_2 for lab, vecs_2 in zip(vecs_2_labels, range(0, n_vecs_2))
-    }
+    vecs_1_to_labels = dict(zip(range(0, n_vecs_1), vecs_1_labels))
+    labels_to_vecs_2 = dict(zip(vecs_2_labels, range(0, n_vecs_2)))
 
     # Use mappings to produce mapping from one list of vectors to other
     vecs_1_to_vecs_2 = {}
@@ -298,28 +295,52 @@ def calculate_scores(vecs_1, vecs_2, vecs_map, metric=norm_difference):
 
 
 class MetricLogger:
+    """Storing common model metric eval scores."""
+
     def __init__(self):
         self.ll = []
         self.accs = []
         self.recalls = []
         self.f1s = []
         self.mattcorrs = []
+        self.n_samples = []
 
     def metrics_func(self, true, preds):
+        """Calculate performance metrics of a model
+
+        Args:
+            true (_type_): Target classifications (y_true)
+            preds (_type_): Predictions from model
+        """
         self.ll.append(log_loss(true, preds))
         self.accs.append(accuracy_score(true, preds > 0.5))
         self.recalls.append(recall_score(true, preds > 0.5))
         self.f1s.append(f1_score(true, preds > 0.5))
         self.mattcorrs.append(matthews_corrcoef(true, preds > 0.5))
+        self.n_samples.append(len(preds))
+        # TODO: uncertainties on metrics?
 
     def log_metrics(self, true_test, preds_test):
+        """Update the metrics stored on the class with a new batch of
+        evaluations
+
+        Args:
+            true_test (_type_): Target values to predict
+            preds_test (_type_): Predictions from the model
+        """
         self.metrics_func(true_test, preds_test)
 
     def output_metrics(self):
+        """Returns the performance scores stored on the class
+
+        Returns:
+            _type_: Dictionary of performance metrics by name
+        """
         return {
             "log_loss": self.ll,
             "accuracy": self.accs,
             "recall": self.recalls,
             "f1s": self.f1s,
             "matthews_corrcoef": self.mattcorrs,
+            "n_samples": self.n_samples,
         }
