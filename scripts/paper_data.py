@@ -104,17 +104,15 @@ with open("../data/outputs/QuestionScores.json", "w", encoding="utf-8") as f:
 
 
 # placeholder data ingestion
-N_COLS = 23
-data = load_sample_data(n_cols=N_COLS, n_rows=3 * 10**3, synthetic=False, binary=True)
-print(data)
+N_COLS = 2
+# data = load_sample_data(n_cols=N_COLS, n_rows=3 * 10**3, synthetic=False, binary=True)
 
-features = data[:, :N_COLS]  # [:, :-1]
-target = data[:, -1]
-target = target / np.amax(target)
-target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
+# features = data[:, :N_COLS]  # [:, :-1]
+# target = data[:, -1]
+# target = target / np.amax(target)
+# target = np.array(target > 0.5, dtype=int).reshape(-1, 1)
 
-traintest, val = train_test_split(data, train_size=0.9, random_state=2)
-# train, test = train_test_split(traintest, train_size=0.85, random_state=2)
+# traintest, val = train_test_split(data, train_size=0.9, random_state=2)
 
 
 ###
@@ -152,11 +150,11 @@ n_pops = [
     100,
 ]  # the number of populations in the mixture model
 
-n_pops = [2, 4]  # , 8, 16, 32]
+n_pops = [2, 4, 8, 16, 32]
 
 BMM_TOL = 10**-1
 BMM_MAX_ITER = 10**1
-KFOLDS = 4
+KFOLDS = 2
 
 
 test_dsets = []
@@ -211,7 +209,6 @@ def choose_bmm_n(train, n_pops_try):
         _type_: _description_
     """
     _iter_bmm_bic = []
-    # _iter_bmm_aic = []
     for m in n_pops_try:
         print(f"Fitting {m} clusters")
         bmm = BernoulliMixture(
@@ -220,7 +217,6 @@ def choose_bmm_n(train, n_pops_try):
         bmm.fit(X=train)
         _iter_bmm_bic.append(bmm.bic)
         # _iter_bmm_aic.append(bmm.aic)
-        # preds = bmm.predict(train, pred_mask=~np.array(colmask))
 
     return n_pops_try[np.argmin(_iter_bmm_bic)]
 
@@ -231,7 +227,6 @@ for pnum in range(14):
     data = np.load(f"../data/processed/binarised/Exam_{pnum}.npy")
 
     ref = ~np.isnan(data)[:, 0]
-    # itercorr = np.zeros((data.shape[1], data.shape[1]))
 
     data = np.array(data[ref, :], dtype=bool)
 
@@ -251,8 +246,10 @@ for pnum in range(14):
     baseline_test_scores = MetricLogger()
 
     results = {}
-
-    for qnum in range(3):
+    _nkn = []
+    _n_bmm = []
+    bmm_test_coords = []
+    for qnum in range(N_COLS):
         print(f" evaluating question {qnum}")
         logreg_valid_scores = MetricLogger()
         knn_valid_scores = MetricLogger()
@@ -284,7 +281,10 @@ for pnum in range(14):
             n_bmms.append(n_bmm_chosen)
             n_bmm_iters.append(n_bmm_chosen)
             bmm_trained = BernoulliMixture(
-                n_components=n_bmm_chosen, tol=BMM_TOL, max_iter=BMM_MAX_ITER
+                n_components=n_bmm_chosen,
+                tol=BMM_TOL,
+                max_iter=BMM_MAX_ITER,
+                use_mlflow=False,
             )
             bmm_trained.fit(X=fold_train)
             bmm_preds = bmm_trained.predict(fold_valid, pred_mask=~np.array(colmask))
@@ -328,7 +328,7 @@ for pnum in range(14):
                 iter_valid_target, lr.predict_proba(iter_valid_features)[:, 1]
             )  # TODO makesure this is class 1
 
-        bmm_results = logreg_valid_scores.output_metrics()
+        bmm_results = bmm_valid_scores.output_metrics()
         bmm_results["chosen_n"] = n_bmms
 
         knn_results = knn_valid_scores.output_metrics()
@@ -345,23 +345,19 @@ for pnum in range(14):
         question_test_features = test[:, colmask]  # validation
         question_test_target = np.array(test[:, qnum], dtype=int)
 
-        print("mode looks like")
-        print(mode(n_knns))
-        print("othe rmode looks like")
-        print(mode(n_bmms))
-        print("accessed looks like")
-        print(mode(n_bmms).mode)
         opt_nknn = mode(n_knns).mode
         opt_nbmm = mode(n_bmms).mode
+        _nkn.append(int(opt_nknn))
+        _n_bmm.append(int(opt_nbmm))
 
-        # run on test data, log, make plots, bang done
         # BMM test performance
         bmm_trained = BernoulliMixture(
-            n_components=opt_nbmm, tol=BMM_TOL, max_iter=BMM_MAX_ITER
+            n_components=opt_nbmm, tol=BMM_TOL, max_iter=BMM_MAX_ITER, use_mlflow=False
         )
         bmm_trained.fit(X=train_all)
         bmm_preds = bmm_trained.predict(test, pred_mask=~np.array(colmask))
         bmm_test_scores.log_metrics(question_test_target, bmm_preds)
+        bmm_test_coords.append(bmm_trained.mu.tolist())
 
         # KNN test performance
 
@@ -388,16 +384,18 @@ for pnum in range(14):
         )
 
     bmm_results = bmm_test_scores.output_metrics()
-    # bmm_results["chosen_n"] = n_bmms
+    bmm_results["cluster_coords"] = bmm_test_coords
+    bmm_results["chosen_n"] = _n_bmm
 
     knn_results = knn_test_scores.output_metrics()
-    # knn_results["chosen_n"] = n_knns
+    knn_results["chosen_n"] = _nkn
 
     results["AllQuestions_test_performance"] = {
         "log_reg": logreg_test_scores.output_metrics(),
         "bmm": bmm_results,
         "knn": knn_results,
         "baseline": baseline_test_scores.output_metrics(),
+        "n_questions": len(question_test_target),
     }
 
     with open(
@@ -406,4 +404,4 @@ for pnum in range(14):
         encoding="utf-8",
     ) as f:
         json.dump(results, f)
-    quit()
+    # quit()
