@@ -269,11 +269,11 @@ fig.delaxes(ax[14])
 fig.tight_layout()
 fig.savefig("../figs/KNN_nchosen_by_exam.png", dpi=300)
 
-##How does each model do on test data?
+##How does each model do on test data - log loss?
 
-fig, ax = plt.subplots(nrows=3, ncols=4, figsize=(16, 12), dpi=300)
+fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(16, 16), dpi=300)
 ax = ax.ravel()
-for pnum in range(1):
+for pnum in range(13):
     with open(
         f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
         encoding="utf-8",
@@ -311,9 +311,188 @@ for pnum in range(1):
     ax[pnum].set_xticks(x_pos, labels=x_labels)
     ax[pnum].set_ylabel("Log loss")
 
-# ax aggregated across all?
 
-fig.savefig("../figs/ModelTestPerformances_logloss_ByExam.png")
+##How does each model do on test data - accuracy?
+
+fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(16, 16), dpi=300)
+ax = ax.ravel()
+for pnum in range(13):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+    ys = [
+        np.mean(np.array(df["log_reg"]["accuracy"]).flatten()),
+        np.mean(np.array(df["bmm"]["accuracy"]).flatten()),
+        np.mean(np.array(df["knn"]["accuracy"]).flatten()),
+        np.mean(np.array(df["baseline"]["accuracy"]).flatten()),
+    ]
+
+    # TODO: Take from actual errors
+    yerrs = [
+        np.std(np.array(df["log_reg"]["accuracy"]).flatten()),
+        np.std(np.array(df["bmm"]["accuracy"]).flatten()),
+        np.std(np.array(df["knn"]["accuracy"]).flatten()),
+        np.std(np.array(df["baseline"]["accuracy"]).flatten()),
+    ]
+    x_labels = ["LogReg", "BMM", "KNN", "Baseline"]
+    x_pos = [1, 2, 3, 4]
+    ax[pnum].scatter(x_pos, ys, c="hcdarknavy")
+    ax[pnum].errorbar(
+        x=x_pos,
+        y=ys,
+        yerr=yerrs,
+        markersize=0,
+        linewidth=0,
+        elinewidth=2,
+        capsize=4,
+        capthick=2,
+        ecolor="hcdarknavy",
+    )
+    ax[pnum].set_xticks(x_pos, labels=x_labels)
+    ax[pnum].set_ylabel("Accuracy")
+
+
+fig.savefig("../figs/ModelTestPerformances_accuracy_ByExam.png")
+
+
+##How does each model do on test data - recall?
+
+fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(16, 16), dpi=300)
+ax = ax.ravel()
+for pnum in range(13):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+    ys = [
+        np.mean(np.array(df["log_reg"]["recall"]).flatten()),
+        np.mean(np.array(df["bmm"]["recall"]).flatten()),
+        np.mean(np.array(df["knn"]["recall"]).flatten()),
+        np.mean(np.array(df["baseline"]["recall"]).flatten()),
+    ]
+
+    # TODO: Take from actual errors
+    yerrs = [
+        np.std(np.array(df["log_reg"]["recall"]).flatten()),
+        np.std(np.array(df["bmm"]["recall"]).flatten()),
+        np.std(np.array(df["knn"]["recall"]).flatten()),
+        np.std(np.array(df["baseline"]["recall"]).flatten()),
+    ]
+    x_labels = ["LogReg", "BMM", "KNN", "Baseline"]
+    x_pos = [1, 2, 3, 4]
+    ax[pnum].scatter(x_pos, ys, c="hcdarknavy")
+    ax[pnum].errorbar(
+        x=x_pos,
+        y=ys,
+        yerr=yerrs,
+        markersize=0,
+        linewidth=0,
+        elinewidth=2,
+        capsize=4,
+        capthick=2,
+        ecolor="hcdarknavy",
+    )
+    ax[pnum].set_xticks(x_pos, labels=x_labels)
+    ax[pnum].set_ylabel("Recall")
+
+
+fig.savefig("../figs/ModelTestPerformances_recall_ByExam.png")
+
+
+##How does each model do on test data - f1?
+
+fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(16, 16), dpi=300)
+ax = ax.ravel()
+for pnum in range(13):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+    ys = [
+        np.mean(np.array(df["log_reg"]["f1s"]).flatten()),
+        np.mean(np.array(df["bmm"]["f1s"]).flatten()),
+        np.mean(np.array(df["knn"]["f1s"]).flatten()),
+        np.mean(np.array(df["baseline"]["f1s"]).flatten()),
+    ]
+
+    # TODO: Take from actual errors
+    yerrs = [
+        np.std(np.array(df["log_reg"]["f1s"]).flatten()),
+        np.std(np.array(df["bmm"]["f1s"]).flatten()),
+        np.std(np.array(df["knn"]["f1s"]).flatten()),
+        np.std(np.array(df["baseline"]["f1s"]).flatten()),
+    ]
+    x_labels = ["LogReg", "BMM", "KNN", "Baseline"]
+    x_pos = [1, 2, 3, 4]
+    ax[pnum].scatter(x_pos, ys, c="hcdarknavy")
+    ax[pnum].errorbar(
+        x=x_pos,
+        y=ys,
+        yerr=yerrs,
+        markersize=0,
+        linewidth=0,
+        elinewidth=2,
+        capsize=4,
+        capthick=2,
+        ecolor="hcdarknavy",
+    )
+    ax[pnum].set_xticks(x_pos, labels=x_labels)
+    ax[pnum].set_ylabel("F1")
+
+
+fig.savefig("../figs/ModelTestPerformances_f1_ByExam.png")
+
+##How does each model do on test data - matthews_corrcoef?
+
+fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(16, 16), dpi=300)
+ax = ax.ravel()
+for pnum in range(13):
+    with open(
+        f"../data/outputs/fits/paper_model_fitting_results_{pnum}.json",
+        encoding="utf-8",
+    ) as f:
+        results = json.load(f)
+    df = results["AllQuestions_test_performance"]
+    ys = [
+        np.mean(np.array(df["log_reg"]["matthews_corrcoef"]).flatten()),
+        np.mean(np.array(df["bmm"]["matthews_corrcoef"]).flatten()),
+        np.mean(np.array(df["knn"]["matthews_corrcoef"]).flatten()),
+        np.mean(np.array(df["baseline"]["matthews_corrcoef"]).flatten()),
+    ]
+
+    # TODO: Take from actual errors
+    yerrs = [
+        np.std(np.array(df["log_reg"]["matthews_corrcoef"]).flatten()),
+        np.std(np.array(df["bmm"]["matthews_corrcoef"]).flatten()),
+        np.std(np.array(df["knn"]["matthews_corrcoef"]).flatten()),
+        np.std(np.array(df["baseline"]["matthews_corrcoef"]).flatten()),
+    ]
+    x_labels = ["LogReg", "BMM", "KNN", "Baseline"]
+    x_pos = [1, 2, 3, 4]
+    ax[pnum].scatter(x_pos, ys, c="hcdarknavy")
+    ax[pnum].errorbar(
+        x=x_pos,
+        y=ys,
+        yerr=yerrs,
+        markersize=0,
+        linewidth=0,
+        elinewidth=2,
+        capsize=4,
+        capthick=2,
+        ecolor="hcdarknavy",
+    )
+    ax[pnum].set_xticks(x_pos, labels=x_labels)
+    ax[pnum].set_ylabel("Matthews Correlation Coeffience")
+
+
+fig.savefig("../figs/ModelTestPerformances_matthews_corrcoef_ByExam.png")
 
 
 # How does the performance aggregate in total? for each of the metrics
@@ -370,10 +549,9 @@ fig, ax = plt.subplots(
 
 ax = ax.ravel()
 
-print(cluster_coords[0, :])
 
 for mu in range(n_cls):
-    ax[mu].plot(cluster_coords[mu, :])
+    ax[mu].plot(cluster_coords[mu])
     if mu % 4 == 0:
         ax[mu].set_ylabel("Probability")
     if mu > n_cls - 4:
